@@ -113,6 +113,7 @@ export function handlePoolCreated(event: PoolCreated): void {
   pool.feeTier = BigInt.fromI32(event.params.fee)
   pool.createdAtTimestamp = event.block.timestamp
   pool.createdAtBlockNumber = event.block.number
+  pool.createAtSqrtPrice = ZERO_BI
   pool.liquidityProviderCount = ZERO_BI
   pool.txCount = ZERO_BI
   pool.liquidity = ZERO_BI

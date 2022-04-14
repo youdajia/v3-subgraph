@@ -79,6 +79,8 @@ type Pool @entity {
   createdAtTimestamp: BigInt!
   # block pool was created at
   createdAtBlockNumber: BigInt!
+  # block pool create price
+  createAtSqrtPrice: BigInt!
   # token0
   token0: Token!
   # token1

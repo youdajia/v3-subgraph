@@ -1,5 +1,5 @@
 /* eslint-disable prefer-const */
-import { Bundle, Burn, Factory, Mint, Pool, Swap, Tick, Token } from '../types/schema'
+import { Bundle, Burn, Factory, Mint, Collect, Flash, Pool, Swap, Tick, Token } from '../types/schema'
 import { Pool as PoolABI } from '../types/Factory/Pool'
 import { BigDecimal, BigInt, ethereum } from '@graphprotocol/graph-ts'
 import {
@@ -7,7 +7,8 @@ import {
   Flash as FlashEvent,
   Initialize,
   Mint as MintEvent,
-  Swap as SwapEvent
+  Swap as SwapEvent,
+  Collect as CollectEvent
 } from '../types/templates/Pool/Pool'
 import { convertTokenToDecimal, loadTransaction, safeDiv } from '../utils'
 import { FACTORY_ADDRESS, ONE_BI, ZERO_BD, ZERO_BI } from '../utils/constants'
@@ -26,6 +27,7 @@ export function handleInitialize(event: Initialize): void {
   // update pool sqrt price and tick
   let pool = Pool.load(event.address.toHexString())
   pool.sqrtPrice = event.params.sqrtPriceX96
+  pool.createAtSqrtPrice = event.params.sqrtPriceX96
   pool.tick = BigInt.fromI32(event.params.tick)
   pool.save()
   
@@ -503,7 +505,35 @@ export function handleFlash(event: FlashEvent): void {
   let feeGrowthGlobal1X128 = poolContract.feeGrowthGlobal1X128()
   pool.feeGrowthGlobal0X128 = feeGrowthGlobal0X128 as BigInt
   pool.feeGrowthGlobal1X128 = feeGrowthGlobal1X128 as BigInt
+  
+  let token0 = Token.load(pool.token0)
+  let token1 = Token.load(pool.token1)
+  let transaction = loadTransaction(event)
+  if (token0 && token1) {
+    let amount0 = convertTokenToDecimal(event.params.amount0, token0.decimals)
+    let amount1 = convertTokenToDecimal(event.params.amount1, token1.decimals)
+    let amount0Paid = convertTokenToDecimal(event.params.paid0, token0.decimals)
+    let amount1Paid = convertTokenToDecimal(event.params.paid1, token1.decimals)
+    let amountUSD = getTrackedAmountUSD(amount0, token0 as Token, amount1, token1 as Token).div(
+      BigDecimal.fromString('2')
+    )
+
+    let flash = new Flash(transaction.id + '#' + event.logIndex.toString())
+    flash.transaction = transaction.id
+    flash.timestamp = event.block.timestamp
+    flash.pool = pool.id
+    flash.amount0 = amount0
+    flash.amount1 = amount1
+    flash.amount0Paid = amount0Paid
+    flash.amount1Paid = amount1Paid
+    flash.amountUSD = amountUSD
+    flash.sender = event.params.sender
+    flash.recipient = event.params.recipient
+    flash.logIndex = event.logIndex
+    flash.save()
+  }
   pool.save()
+
 }
 
 function updateTickFeeVarsAndSave(tick: Tick, event: ethereum.Event): void {
@@ -528,5 +558,45 @@ function loadTickUpdateFeeVarsAndSave(tickId: i32, event: ethereum.Event): void 
   )
   if (tick !== null) {
     updateTickFeeVarsAndSave(tick!, event)
+  }
+}
+
+
+export function handleCollectPool(event: CollectEvent): void {
+  // update fee growth
+  let pool = Pool.load(event.address.toHexString())
+
+  if (pool) {
+    let token0 = Token.load(pool.token0)
+    let token1 = Token.load(pool.token1)
+    let transaction = loadTransaction(event)
+
+    if (token0 && token1) {
+      // amounts - 0/1 are token deltas: can be positive or negative
+      let amount0 = convertTokenToDecimal(event.params.amount0, token0.decimals)
+      pool.totalValueLockedToken0 = pool.totalValueLockedToken0.minus(amount0)
+
+      let amount1 = convertTokenToDecimal(event.params.amount1, token1.decimals)
+      pool.totalValueLockedToken1 = pool.totalValueLockedToken1.minus(amount1)
+
+      let amountUSD = getTrackedAmountUSD(amount0, token0 as Token, amount1, token1 as Token).div(
+        BigDecimal.fromString('2')
+      )
+
+      let collect = new Collect(transaction.id + '#' + event.logIndex.toString())
+      collect.transaction = transaction.id
+      collect.timestamp = event.block.timestamp
+      collect.pool = pool.id
+      collect.owner = event.params.owner
+      collect.amount0 = amount0
+      collect.amount1 = amount1
+      collect.amountUSD = amountUSD
+      collect.tickLower = BigInt.fromI32(event.params.tickLower)
+      collect.tickUpper = BigInt.fromI32(event.params.tickUpper)
+      collect.logIndex = event.logIndex
+      
+      pool.save()
+      collect.save()
+    }
   }
 }
