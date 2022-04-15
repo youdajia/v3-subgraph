@@ -66,12 +66,13 @@ dataSources:
           handler: handleCollect
         - event: Transfer(indexed address,indexed address,indexed uint256)
           handler: handleTransfer
-templates:
   - kind: ethereum/contract
-    name: Pool
+    name: UniswapV3Sand
     network: mainnet
     source:
+      address: '0x5859ebE6Fd3BBC6bD646b73a5DbB09a5D7B6e7B7'
       abi: Pool
+      startBlock: 12546783
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.4
@@ -100,3 +101,24 @@ templates:
           handler: handleFlash
         - event: Collect(indexed address,address,indexed int24,indexed int24,uint128,uint128)
           handler: handleCollectPool
+templates:
+  - kind: ethereum/contract
+    name: Pool
+    network: mainnet
+    source:
+        abi: Pool
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.4
+      language: wasm/assemblyscript
+      file: ./src/mappings/core.ts
+      entities:
+        - Pool
+        - Token
+      abis:
+        - name: Pool
+          file: ./abis/pool.json
+        - name: Factory
+          file: ./abis/factory.json
+        - name: ERC20
+          file: ./abis/ERC20.json
