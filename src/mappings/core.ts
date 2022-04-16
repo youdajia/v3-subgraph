@@ -505,7 +505,9 @@ export function handleFlash(event: FlashEvent): void {
   let feeGrowthGlobal1X128 = poolContract.feeGrowthGlobal1X128()
   pool.feeGrowthGlobal0X128 = feeGrowthGlobal0X128 as BigInt
   pool.feeGrowthGlobal1X128 = feeGrowthGlobal1X128 as BigInt
-  
+  pool.txCount = pool.txCount.plus(ONE_BI)
+  pool.save()
+
   let token0 = Token.load(pool.token0)
   let token1 = Token.load(pool.token1)
   let transaction = loadTransaction(event)
@@ -518,7 +520,7 @@ export function handleFlash(event: FlashEvent): void {
       BigDecimal.fromString('2')
     )
 
-    let flash = new Flash(transaction.id + '#' + event.logIndex.toString())
+    let flash = new Flash(transaction.id + '#' + pool.txCount.toString())
     flash.transaction = transaction.id
     flash.timestamp = event.block.timestamp
     flash.pool = pool.id
@@ -532,8 +534,6 @@ export function handleFlash(event: FlashEvent): void {
     flash.logIndex = event.logIndex
     flash.save()
   }
-  pool.save()
-
 }
 
 function updateTickFeeVarsAndSave(tick: Tick, event: ethereum.Event): void {
@@ -570,6 +570,7 @@ export function handleCollectPool(event: CollectEvent): void {
     let token0 = Token.load(pool.token0)
     let token1 = Token.load(pool.token1)
     let transaction = loadTransaction(event)
+    pool.txCount = pool.txCount.plus(ONE_BI)
 
     if (token0 && token1) {
       // amounts - 0/1 are token deltas: can be positive or negative
@@ -579,11 +580,12 @@ export function handleCollectPool(event: CollectEvent): void {
       let amount1 = convertTokenToDecimal(event.params.amount1, token1.decimals)
       pool.totalValueLockedToken1 = pool.totalValueLockedToken1.minus(amount1)
 
+      pool.save()
       let amountUSD = getTrackedAmountUSD(amount0, token0 as Token, amount1, token1 as Token).div(
         BigDecimal.fromString('2')
       )
 
-      let collect = new Collect(transaction.id + '#' + event.logIndex.toString())
+      let collect = new Collect(transaction.id + '#' + pool.txCount.toString())
       collect.transaction = transaction.id
       collect.timestamp = event.block.timestamp
       collect.pool = pool.id
@@ -594,8 +596,6 @@ export function handleCollectPool(event: CollectEvent): void {
       collect.tickLower = BigInt.fromI32(event.params.tickLower)
       collect.tickUpper = BigInt.fromI32(event.params.tickUpper)
       collect.logIndex = event.logIndex
-      
-      pool.save()
       collect.save()
     }
   }
