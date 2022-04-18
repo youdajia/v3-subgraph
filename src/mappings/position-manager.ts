@@ -6,8 +6,8 @@ import {
   NonfungiblePositionManager,
   Transfer
 } from '../types/NonfungiblePositionManager/NonfungiblePositionManager'
-import { Bundle, Position, PositionSnapshot, Token } from '../types/schema'
-import { ADDRESS_ZERO, factoryContract, ZERO_BD, ZERO_BI } from '../utils/constants'
+import { Bundle, Position, PositionSnapshot, Token, Pool } from '../types/schema'
+import { ADDRESS_ZERO, factoryContract, ZERO_BD, ZERO_BI, ONE_BI } from '../utils/constants'
 import { Address, BigInt, ethereum } from '@graphprotocol/graph-ts'
 import { convertTokenToDecimal, loadTransaction } from '../utils'
 
@@ -77,6 +77,12 @@ function savePositionSnapshot(position: Position, event: ethereum.Event): void {
   positionSnapshot.feeGrowthInside0LastX128 = position.feeGrowthInside0LastX128
   positionSnapshot.feeGrowthInside1LastX128 = position.feeGrowthInside1LastX128
   positionSnapshot.save()
+  
+  let pool = Pool.load(event.address.toHexString())
+  if (pool !== null) {
+    pool.txCount = pool.txCount.plus(ONE_BI)
+    pool.save()
+  }
 }
 
 export function handleIncreaseLiquidity(event: IncreaseLiquidity): void {
